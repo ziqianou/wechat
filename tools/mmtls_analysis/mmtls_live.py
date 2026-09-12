@@ -2,12 +2,12 @@
 """
 微信 mmtls 实时抓包 + 动态解包输出
 - 自动识别微信服务器 IP（指定或自动）
-- 解密失败时自动用 gdb 硬件断点提取新会话 key（无需手动提供）
-- 解析并打印明文结构 / 可读字符串 / URI
+- 使用会话密钥实时解密并打印明文结构 / 可读字符串 / URI
 
 用法:
-  sudo python3 -u mmtls_live.py                # 自动识别 IP + 自动提取 key
-  sudo python3 -u mmtls_live.py <服务器IP>      # 指定 IP
+  MMTLS_KEYS="key1 iv1 key2 iv2" sudo python3 -u mmtls_live.py [服务器IP]
+  # key/iv 由 gdb 硬件断点提取（tools/gdb_extract_key.sh）
+  # 连接重连后 key 变化，需重新提取
 
 依赖: python3-cryptography, tcpdump, gdb（自动提取 key 时）
 """
@@ -184,13 +184,15 @@ def main():
     args = sys.argv[1:]
     target_ip = args[0] if args else None
     dec = LiveDecoder()
-    # 自动提取 key（gdb 硬件断点）
+    # 会话密钥（gdb 硬件断点提取，经 MMTLS_KEYS 传入）
     pid, base = get_wechat()
     if pid is None:
         print("[!] 未检测到微信进程", flush=True); return
-    dec.set_keys(
-        "181a2fc86c40946b33690cfa922dbbd0", "15b41b09b48cd8cd0e7a3777",
-        "fefede1671d05af581500a2387e35cbb", "685cd30d7fe27f0bda700127")
+    keys = os.environ.get('MMTLS_KEYS', '').split()
+    if len(keys) < 4:
+        print('[!] 需要会话密钥：MMTLS_KEYS="key1 iv1 key2 iv2"（由 tools/gdb_extract_key.sh 提取）', flush=True)
+        return
+    dec.set_keys(*keys[:4])
     start_tcpdump()
     print(f"[*] tcpdump -> {PCAP}  监听{'服务器'+target_ip if target_ip else '所有mmtls'} 流量", flush=True)
     print("[*] Ctrl+C 退出", flush=True)

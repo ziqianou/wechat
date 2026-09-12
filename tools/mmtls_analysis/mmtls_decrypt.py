@@ -4,19 +4,22 @@ WeChat mmtls AES-128-GCM decryptor.
 Decrypts captured app-data records offline using the session key + IV
 (extracted via gdb hardware breakpoints).
 
-Usage: python3 -u mmtls_decrypt.py <pcap> <flow_ip> [key_hex] [iv_hex]
+Usage: python3 -u mmtls_decrypt.py <pcap> <flow_ip> <key_hex> <iv_hex>
 
-Parameters (verified for the session that was captured):
-  key = 181a2fc86c40946b33690cfa922dbbd0
-  iv  = 15b41b09b48cd8cd0e7a3777
+Parameters (per-session, extracted via gdb hardware breakpoints):
+  key   = 16B hex
+  iv    = 12B hex
   nonce = IV XOR record_seq(12B BE)
   aad   = record_seq(8B BE) + 5-byte record header
 """
 import sys, struct
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
-KEY = bytes.fromhex(sys.argv[3] if len(sys.argv) > 3 else "181a2fc86c40946b33690cfa922dbbd0")
-IV  = bytes.fromhex(sys.argv[4] if len(sys.argv) > 4 else "15b41b09b48cd8cd0e7a3777")
+if len(sys.argv) < 5:
+    sys.exit("用法: python3 mmtls_decrypt.py <pcap> <flow_ip> <key_hex> <iv_hex>")
+
+KEY = bytes.fromhex(sys.argv[3])
+IV  = bytes.fromhex(sys.argv[4])
 
 def extract_records(pcap, flow):
     hdr = open(pcap, "rb").read(24)

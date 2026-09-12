@@ -173,10 +173,10 @@ MAXSEQ=512 PHASE=12 SCAN16=1 python3 -u scan_key.py <pid> <pcap> <微信服务�
 
 ```
 Cipher:  AES-128-GCM
-Key1 (客户端→服务器):  18 1a 2f c8 6c 40 94 6b 33 69 0c fa 92 2d bb d0
-IV1                    15 b4 1b 09 b4 8c d8 cd 0e 7a 37 77
-Key2 (服务器→客户端):  fe fe de 16 71 d0 5a f5 81 50 0a 23 87 e3 5c bb
-IV2                    68 5c d3 0d 7f e2 7f 0b da 70 01 27
+Key1 (客户端→服务器):  <16B，gdb 提取>
+IV1                    <12B>
+Key2 (服务器→客户端):  <16B>
+IV2                    <12B>
 Nonce:   IV XOR record_seq(12B 大端)     ← 每记录递增
 AAD:     record_seq(8B 大端) + 5B记录头(17 f1 04 len)
 ```
@@ -184,22 +184,22 @@ AAD:     record_seq(8B 大端) + 5B记录头(17 f1 04 len)
 key1/key2 位于 cipher 对象 `[cobj+0x50]`/`[cobj+0xc0]`（第二对象基址 `cobj+0x70`，
 同布局 rel+0x50/+0x30），IV 在 `[cobj+0x30]`/`[cobj+0xa0]`。
 
-**离线解密工具**（`mmtls_analysis/`）：
+**离线解密工具**（`tools/mmtls_analysis/`）：
 ```bash
-python3 mmtls_decrypt.py <pcap> <服务器IP> [key_hex] [iv_hex]
+python3 mmtls_decrypt.py <pcap> <服务器IP> <key_hex> <iv_hex>
 ```
 
-**实时抓包解包输出**（`mmtls_analysis/`）：
+**实时抓包解包输出**（`tools/mmtls_analysis/`）：
 ```bash
-sudo python3 -u mmtls_live.py [服务器IP] [key1] [iv1] [key2] [iv2]
-# 默认使用上面提取的 key，持续监听并实时打印解密明文
+MMTLS_KEYS="key1 iv1 key2 iv2" sudo python3 -u mmtls_live.py [服务器IP]
+# 密钥由 gdb 硬件断点提取（tools/gdb_extract_key.sh）
 # 连接重连后 key 变化，会提示 DECRYPT-FAIL，需重新提取
 ```
 
 解密出的 mars 明文结构（含设备号、URI、自增计数器）：
 ```
-00 00 01 72 | 00 10 00 01 | 00 00 00 79 | 00 00 02 xx | bf c9 5f f2 74 11 08 20 ...
-17874710266453180370596149096   ← 设备/账号标识
+00 00 01 72 | 00 10 00 01 | 00 00 00 79 | 00 00 02 xx | <8B 会话/设备数据> ...
+<device/account id>   ← 设备/账号标识（解密明文）
 /cgi-bin/micromsg-bin/statusnotify, newsync ...
 ```
 
@@ -213,5 +213,5 @@ sudo python3 -u mmtls_live.py [服务器IP] [key1] [iv1] [key2] [iv2]
 
 **明文捕获命令**（无需 key，直接读加密前数据）：
 ```bash
-sudo bash mmtls_analysis/tools/gdb_capture_plaintext.sh
+sudo bash tools/mmtls_analysis/tools/gdb_capture_plaintext.sh
 ```

@@ -1,12 +1,12 @@
 # WeChat mmtls 逆向工具集
 
-本目录包含整个逆向会话的脚本。核心解密参数见 `../README.md` §7.5。
+本目录包含整个逆向会话的脚本。核心解密参数见 `../README.md` §7.3。
 
 ## 解密 / 解析（主交付物）
 
 | 工具 | 用途 |
 |------|------|
-| `../mmtls_decrypt.py` | **离线解密** pcap：`python3 mmtls_decrypt.py <pcap> <IP> [key] [iv]` |
+| `../mmtls_decrypt.py` | **离线解密** pcap：`python3 mmtls_decrypt.py <pcap> <IP> <key> <iv>` |
 | `../mmtls_parser.py` | 解析 mmtls 记录流（HTTP/裸TCP） |
 | `../pcap_mmtls.py` | pcap 流重组 + 记录解析 |
 

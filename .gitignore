@@ -23,7 +23,6 @@
 /tools/frida_cdn/*.json
 /tools/frida_cdn/*.log
 /tools/frida_cdn/libs/
-/tools/frida_cdn/*.md
 /tools/mmtls_analysis/extracted/
 /tools/mmtls_analysis/*.log
 *.bin
