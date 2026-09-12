@@ -8,7 +8,7 @@
 - **语音转文字**：SILK 语音自动转写为文本（Whisper）
 - **增量更新**：只处理新消息，媒体结果缓存复用
 - **数据库直接解密**：本地密钥配置（`wx_secrets.py`），本地快照后解密真实微信数据目录
-- **缺失图片补全**：从消息 XML 提取 CDN URL 下载表情包，转 V2 dat 落盘
+- **缺失图片补全**：从消息 XML 提取 CDN URL 下载表情包，转 V2 dat 存入本地 `data/downloads`（不写微信目录）
 - **朋友圈图片导出**：解密 SNS 缓存图片，按 原图/缩略图（`original`/`thumbnail`）分类整理
 
 ---
@@ -24,7 +24,7 @@
 | 增量更新 | 记录每个会话进度，只处理新增消息 | ✅ |
 | H265 原图保留 | 微信 4.0 的 wxgf(HEVC) 图片可转 JPEG 或保留 `.h265` | ✅ |
 | 数据库直接解密 | 本地密钥配置，本地快照 + SQLCipher 解密真实目录 | ✅ |
-| 缺失图片补全 | 下载消息 XML 自带 URL 的表情包，转 V2 dat 落盘 | ✅ |
+| 缺失图片补全 | 下载消息 XML 自带 URL 的表情包，转 V2 dat 存入本地 `data/downloads` | ✅ |
 | 朋友圈图片导出 | 解密 SNS 缓存，按原图/缩略图（`original`/`thumbnail`）分类 | ✅ |
 
 ---
@@ -70,7 +70,7 @@ WECHAT_VLM=1 ./run.sh 联系人A
 ### 补全缺失图片
 
 ```bash
-# 下载消息 XML 自带 URL 的表情包/emoji，转 V2 dat 落盘（会话 hash = Msg_ 表名后缀）
+# 下载消息 XML 自带 URL 的表情包/emoji，转 V2 dat 存本地 data/downloads（会话 hash = Msg_ 表名后缀）
 python3 wxlib/image_downloader.py <conv_hash>
 
 # 微信浏览有新图片的会话时，扫描进程内存捕获 CDN 下载 URL
@@ -116,6 +116,7 @@ python3 wxlib/url_capture.py
 | `data/out/<month>/Img/*.h265` | wxgf 图片的 H265 原始编码 |
 | `data/cache/voices/` | 语音转写缓存（`<local_id>.txt`；中间 silk/pcm/mp3 为临时文件，转写后即删除） |
 | `data/cache/` | 增量状态与媒体结果缓存（`state.json`/`images/`/`voices/`） |
+| `data/downloads/` | 补全的图片 V2 dat 与 `index.json`（本地，不写微信目录） |
 
 ---
 
@@ -247,6 +248,7 @@ python3 src/export_sns.py --limit 100
 - 保证微信运行目录不被创建/修改 `-shm`、`-wal` 等文件
 - 已复制过且源文件未变化时直接复用，避免重复拷贝大库（`message_0.db` ~115MB）
 - 解密连接统一由 `local_db.open_local()` 处理（自动匹配密钥）
+- 补全的图片写入 `data/downloads/`，不写微信 `msg/attach/`，也不修改真实 `hardlink.db`
 - 如需释放磁盘空间：删除 `data/db_local/` 即可
 
 ### 缺失图片补全（V2 dat 生成 + CDN 下载）
@@ -257,8 +259,9 @@ python3 src/export_sns.py --limit 100
    直接 HTTP 下载明文 PNG/GIF
 2. **转 V2 dat**：`img_to_v2dat()` 将明文图片转为微信原生 V2 dat 格式
    （`07 08 56 32` 头 + AES-ECB 前 1024B + 剩余 XOR），与微信客户端生成的完全一致
-3. **落盘**：写入真实 `msg/attach/<conversation>/<month>/Img/<md5>.dat`，并更新 `hardlink.db` 记录，
-   使导出脚本/OCR 能直接识别
+3. **落盘**：存入本地 `data/downloads/<conversation>/<month>/Img/<md5>.dat` 并登记
+   `data/downloads/index.json`；导出/OCR 通过 `build_image_resolver()` 叠加该索引读取，
+   **不写入微信真实目录、不修改 `hardlink.db`**
 
 普通 C2C 聊天图片（`<img>` 消息）的 CDN URL 需微信运行时动态签发 `storeid`，
 无法静态构造（测试返回 400）。仅当微信浏览到有新图片的会话时可配合
@@ -343,7 +346,7 @@ mmtls 工具所需的可选依赖。
 ├── wxlib/                      # 核心库（解密 + OCR/VLM + 会话定位）
 │   ├── media_tools.py
 │   ├── local_db.py             #   微信数据库本地快照（不污染微信运行目录）
-│   ├── image_downloader.py     #   缺失图片补全（表情包下载 + V2 dat 生成 + 落盘）
+│   ├── image_downloader.py     #   缺失图片补全（下载 + V2 dat 生成，存本地 data/downloads）
 │   ├── url_capture.py          #   扫描微信进程内存捕获 CDN storeid URL
 │   ├── sns_export.py           #   朋友圈缓存图片导出（解密+original/thumbnail 分类）
 │   ├── decrypt_v4.py           #   批量图片解密脚本
@@ -359,6 +362,7 @@ mmtls 工具所需的可选依赖。
 │   ├── cache/                  #   增量状态与媒体结果缓存（state.json/images/voices）
 │   ├── db_local/               #   本地数据库副本
 │   ├── out/                    #   解密后的图片（按月份）
+│   ├── downloads/              #   补全的图片 V2 dat + index.json（不写微信目录）
 │   └── sns_images/             #   朋友圈图片导出（<month>/{original,thumbnail}/）
 └── chat_history_*.txt          # 导出的聊天记录
 ```

@@ -244,27 +244,43 @@ def _open_db(path):
     return open_local(_snap_db(path))
 
 
+_DOWNLOAD_INDEX = os.path.join(_ROOT, 'data', 'downloads', 'index.json')
+
+
+def _download_overlay():
+    """本地补全图片索引：md5 -> data/downloads 下的 dat 绝对路径"""
+    try:
+        import json
+        if os.path.exists(_DOWNLOAD_INDEX):
+            with open(_DOWNLOAD_INDEX, encoding='utf-8') as f:
+                idx = json.load(f)
+            base = os.path.dirname(_DOWNLOAD_INDEX)
+            return {md5: os.path.join(base, rel) for md5, rel in idx.items()}
+    except Exception as e:
+        logger.warning("读取本地补全图片索引失败: %s", e)
+    return {}
+
+
 def build_image_resolver(message_db, hardlink_db, attach_root):
-    """返回 (md5 -> (abs_path, thumb_path)) 解析器"""
+    """返回 md5 -> dat 绝对路径 的解析器（hardlink 映射 + 本地补全覆盖）"""
+    resolver = {}
     try:
         hl = _open_db(hardlink_db)
         hcur = hl.cursor()
         hcur.execute('SELECT rowid, username FROM dir2id')
         d2id = {r[0]: r[1] for r in hcur.fetchall()}
-        resolver = {}
         for dir1, dir2, fname, md5 in hcur.execute(
                 'SELECT dir1, dir2, file_name, md5 FROM image_hardlink_info_v4'):
             conv = d2id.get(dir1)
             month = d2id.get(dir2)
             if not conv or not month or not fname:
                 continue
-            p = os.path.join(attach_root, conv, month, 'Img', fname)
-            resolver[md5] = p
+            resolver[md5] = os.path.join(attach_root, conv, month, 'Img', fname)
         hl.close()
-        return resolver
     except Exception as e:
         logger.warning("hardlink.db 打开/解密失败，跳过图片本地映射: %s", e)
-        return {}
+    resolver.update(_download_overlay())
+    return resolver
 
 
 def build_conversation_images(hardlink_db, attach_root, conv_hash):

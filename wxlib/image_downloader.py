@@ -3,17 +3,14 @@
 - V2 dat 生成（已验证算法）：明文图片 -> V2 dat
 - 表情包/emoji：XML 自带 cdnurl，直接下载
 - 普通 C2C 图片：需 storeid URL（gdb 捕获或微信下载）
-- 落盘到真实 attach 目录 + 更新 hardlink 数据库
+- 落盘到本地 data/downloads，并登记索引供导出/OCR 读取（不写微信真实目录）
 
-所有数据库直接解密真实目录（绕开 /app/data 云备份）。
+所有数据库只读本地快照（绕开 /app/data 云备份），不修改微信数据。
 """
 import os
 import re
 import sys
 import struct
-import sqlite3
-import hashlib
-import logging
 import urllib.request
 import urllib.error
 import zstandard as zstd
@@ -25,14 +22,12 @@ import logging_config as lc
 _ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
-from wx_secrets import WX_BASE, SELF_WXID, DB_KEYS, IMAGE_AES_KEY
+from wx_secrets import WX_BASE, DB_KEYS, IMAGE_AES_KEY
 
 logger = lc.get_logger('image_downloader')
 
 # ---------------- 路径与密钥 ----------------
 DB_MESSAGE = os.path.join(WX_BASE, 'db_storage/message/message_0.db')
-DB_HARDLINK = os.path.join(WX_BASE, 'db_storage/hardlink/hardlink.db')
-ATTACH_ROOT = os.path.join(WX_BASE, 'msg/attach')
 
 # V2 dat 常量（与 media_tools.py 一致）
 V2_AES_KEY = bytes.fromhex(IMAGE_AES_KEY)
@@ -40,8 +35,8 @@ V2_HEADER = b'\x07\x08\x56\x32\x08\x07'
 V2_AES_LEN = 1024
 V2_XOR = 0xAC
 
-CACHE_DIR = os.path.join(_ROOT, 'data', 'cache', 'downloads')
-os.makedirs(CACHE_DIR, exist_ok=True)
+DOWNLOAD_ROOT = os.path.join(_ROOT, 'data', 'downloads')
+INDEX_FILE = os.path.join(DOWNLOAD_ROOT, 'index.json')
 
 
 # ---------------- 数据库访问 ----------------
@@ -63,10 +58,6 @@ def _snap_db(path):
 
 def get_message_db():
     return open_db(DB_MESSAGE, DB_KEYS['message_0.db'])
-
-
-def get_hardlink_db():
-    return open_db(DB_HARDLINK, DB_KEYS['hardlink.db'])
 
 
 # ---------------- V2 dat 生成 ----------------
@@ -178,59 +169,42 @@ def extract_images_from_content(content):
     return images
 
 
-# ---------------- 落盘 ----------------
-def save_to_attach(conv_hash, md5, dat_bytes):
-    """保存 V2 dat 到 attach 目录。返回路径或 None"""
-    # 从 create_time 推断月份（由调用方提供），这里用当前月兜底
+# ---------------- 本地落盘（不写微信目录） ----------------
+def _load_index():
+    import json
+    if os.path.exists(INDEX_FILE):
+        try:
+            with open(INDEX_FILE, encoding='utf-8') as f:
+                return json.load(f)
+        except Exception:
+            return {}
+    return {}
+
+
+def _save_index(index):
+    import json
+    os.makedirs(DOWNLOAD_ROOT, exist_ok=True)
+    tmp = INDEX_FILE + '.tmp'
+    with open(tmp, 'w', encoding='utf-8') as f:
+        json.dump(index, f, ensure_ascii=False, indent=1)
+    os.replace(tmp, INDEX_FILE)
+
+
+def save_local(conv_hash, md5, dat_bytes, month=None):
+    """保存 V2 dat 到本地 data/downloads，并登记索引。返回相对路径或 None"""
     import datetime
-    month = datetime.date.today().strftime('%Y-%m')
-    conv_dir = os.path.join(ATTACH_ROOT, conv_hash, month, 'Img')
+    if month is None:
+        month = datetime.date.today().strftime('%Y-%m')
+    conv_dir = os.path.join(DOWNLOAD_ROOT, conv_hash, month, 'Img')
     os.makedirs(conv_dir, exist_ok=True)
-    fname = md5 + '.dat'
-    path = os.path.join(conv_dir, fname)
+    path = os.path.join(conv_dir, md5 + '.dat')
     with open(path, 'wb') as f:
         f.write(dat_bytes)
-    return path
-
-
-def add_hardlink_record(conv_hash, md5, file_name, file_size):
-    """向 hardlink.db 的 image_hardlink_info_v4 插入记录"""
-    conn = get_hardlink_db()
-    cur = conn.cursor()
-    # 获取 dir1(dir2) rowid
-    cur.execute("SELECT rowid, username FROM dir2id")
-    d2id = {r[1]: r[0] for r in cur.fetchall()}
-    dir1 = d2id.get(conv_hash)
-    if dir1 is None:
-        logger.error("会话 %s 不在 dir2id 中", conv_hash)
-        conn.close()
-        return False
-    # dir2 用当前月
-    import datetime
-    month = datetime.date.today().strftime('%Y-%m')
-    dir2 = d2id.get(month)
-    if dir2 is None:
-        # 插入月份 dir
-        cur.execute("INSERT INTO dir2id(username) VALUES (?)", (month,))
-        dir2 = cur.lastrowid
-    md5_hash = hashlib.md5(md5.encode()).hexdigest()
-    md5_hash_i = int(md5_hash, 16) % (2**63)
-    try:
-        cur.execute("SELECT COALESCE(MAX(_rowid_), 0) FROM image_hardlink_info_v4")
-        next_rowid = cur.fetchone()[0] + 1
-        cur.execute(
-            "INSERT INTO image_hardlink_info_v4(md5_hash, md5, type, file_name, file_size, modify_time, dir1, dir2, _rowid_, extra_buffer) "
-            "VALUES (?,?,?,?,?,?,?,?,?,?)",
-            (md5_hash_i, md5, 2, file_name, file_size, int(__import__('time').time()), dir1, dir2,
-             next_rowid, None))
-        conn.commit()
-        logger.info("hardlink 记录已添加: %s", md5)
-        conn.close()
-        return True
-    except Exception as e:
-        logger.error("hardlink 插入失败: %s", e)
-        conn.close()
-        return False
+    rel = os.path.relpath(path, DOWNLOAD_ROOT)
+    index = _load_index()
+    index[md5] = rel
+    _save_index(index)
+    return rel
 
 
 # ---------------- 下载 ----------------
@@ -253,7 +227,7 @@ def download_url(url, timeout=20):
 
 # ---------------- 表情包下载（已确认可行） ----------------
 def download_emoji_images(conv_hash):
-    """下载会话中所有 emoji 图片，转 V2 dat 落盘。返回 (成功, 失败)"""
+    """下载会话中所有 emoji 图片，转 V2 dat 存本地 data/downloads。返回 (成功, 失败)"""
     messages = extract_conv_messages(conv_hash)
     emoji_images = []
     for msg in messages:
@@ -283,31 +257,34 @@ def download_emoji_images(conv_hash):
             fail += 1
             continue
         dat = img_to_v2dat(data)
-        path = save_to_attach(conv_hash, md5, dat)
-        if path:
-            add_hardlink_record(conv_hash, md5, os.path.basename(path), len(dat))
+        try:
+            save_local(conv_hash, md5, dat, month=_month_of(ct))
             ok += 1
             logger.info("emoji %s 已下载并转 V2 dat (%dB)", md5, len(dat))
-        else:
+        except Exception as e:
+            logger.warning("保存 emoji %s 失败: %s", md5, e)
             fail += 1
     logger.info("emoji 下载完成: 成功 %d, 失败 %d", ok, fail)
     return ok, fail
 
 
+def _month_of(ts):
+    """create_time -> 'YYYY-MM'，失败用当前月兜底"""
+    import datetime
+    try:
+        return datetime.datetime.fromtimestamp(int(ts)).strftime('%Y-%m')
+    except Exception:
+        return datetime.date.today().strftime('%Y-%m')
+
+
 def _local_exists(conv_hash, md5):
-    """检查本地 attach 是否已有该 md5 的图片"""
+    """检查本地 data/downloads 是否已有该 md5 的图片"""
+    rel = _load_index().get(md5)
+    if rel and os.path.exists(os.path.join(DOWNLOAD_ROOT, rel)):
+        return True
     import glob
-    conv_dir = os.path.join(ATTACH_ROOT, conv_hash)
-    for f in glob.glob(os.path.join(conv_dir, '*', 'Img', md5 + '.dat')):
-        if os.path.exists(f):
-            return True
-    # 也检查 hardlink
-    conn = get_hardlink_db()
-    cur = conn.cursor()
-    cur.execute("SELECT 1 FROM image_hardlink_info_v4 WHERE md5=?", (md5,))
-    found = cur.fetchone() is not None
-    conn.close()
-    return found
+    conv_dir = os.path.join(DOWNLOAD_ROOT, conv_hash)
+    return bool(glob.glob(os.path.join(conv_dir, '*', 'Img', md5 + '.dat')))
 
 
 def _is_encrypted(data):
