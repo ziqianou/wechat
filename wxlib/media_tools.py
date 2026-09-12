@@ -354,6 +354,55 @@ def ocr_image(img_bytes, suffix='jpg'):
     return lines
 
 
+# VLM 模型候选：(最低显存 GiB, 模型 id, 是否 4bit 量化)
+_VLM_CANDIDATES = (
+    (24, 'Qwen/Qwen2.5-VL-7B-Instruct', False),
+    (10, 'Qwen/Qwen2.5-VL-7B-Instruct', True),
+    (0,  'Qwen/Qwen2.5-VL-3B-Instruct', True),
+)
+
+
+def _detect_vram_gb():
+    """返回主 GPU 显存大小（GiB）；无 GPU 返回 0。"""
+    try:
+        import torch
+        if torch.cuda.is_available():
+            return torch.cuda.get_device_properties(0).total_memory / (1024 ** 3)
+    except Exception:
+        pass
+    return 0.0
+
+
+def _detect_ram_gb():
+    """返回系统内存大小（GiB）。"""
+    try:
+        import psutil
+        return psutil.virtual_memory().total / (1024 ** 3)
+    except Exception:
+        return 16.0
+
+
+def _select_vlm_config():
+    """按可用显存选择模型与量化方式，可用 WECHAT_VLM_MODEL 强制指定模型 id。
+    返回 (model_id, load_in_4bit, max_memory)"""
+    vram = _detect_vram_gb()
+    ram = _detect_ram_gb()
+    override = os.environ.get('WECHAT_VLM_MODEL')
+    if override:
+        model_id, load_in_4bit = override, vram < 12
+    else:
+        model_id, load_in_4bit = _VLM_CANDIDATES[-1][1:]
+        for min_gb, mid, quant in _VLM_CANDIDATES:
+            if vram >= min_gb:
+                model_id, load_in_4bit = mid, quant
+                break
+    max_memory = {}
+    if vram > 0:
+        max_memory[0] = f'{max(1.0, vram * 0.9):.1f}GiB'
+    max_memory['cpu'] = f'{max(4.0, ram - 4):.0f}GiB'
+    return model_id, load_in_4bit, max_memory
+
+
 def get_vlm():
     global _vlm, _vlm_proc
     if _vlm is None:
@@ -364,23 +413,26 @@ def get_vlm():
         # 强制离线模式：模型已缓存，避免每次联网检查/下载
         os.environ.setdefault('HF_HUB_OFFLINE', '1')
         os.environ.setdefault('TRANSFORMERS_OFFLINE', '1')
-        # 屏蔽 bitsandbytes 非对齐 kernel 警告（GTX1650 无影响）
+        # 屏蔽 bitsandbytes 非对齐 kernel 警告
         import warnings
         warnings.filterwarnings('ignore', module='bitsandbytes')
         import torch
         from transformers import AutoProcessor, AutoModelForImageTextToText, BitsAndBytesConfig
-        bnb = BitsAndBytesConfig(load_in_4bit=True,
-                                 bnb_4bit_compute_dtype=torch.float16,
-                                 bnb_4bit_quant_type='nf4',
-                                 llm_int8_enable_fp32_cpu_offload=True)
-        _vlm_proc = AutoProcessor.from_pretrained('Qwen/Qwen2.5-VL-3B-Instruct',
+        model_id, load_in_4bit, max_memory = _select_vlm_config()
+        logger.info("VLM 选择: %s (4bit=%s, 显存=%.1fGiB)", model_id, load_in_4bit, _detect_vram_gb())
+        kwargs = {}
+        if load_in_4bit:
+            kwargs['quantization_config'] = BitsAndBytesConfig(
+                load_in_4bit=True,
+                bnb_4bit_compute_dtype=torch.float16,
+                bnb_4bit_quant_type='nf4',
+                llm_int8_enable_fp32_cpu_offload=True)
+        _vlm_proc = AutoProcessor.from_pretrained(model_id,
                                                   trust_remote_code=True,
                                                   local_files_only=True)
         _vlm = AutoModelForImageTextToText.from_pretrained(
-            'Qwen/Qwen2.5-VL-3B-Instruct', trust_remote_code=True,
-            quantization_config=bnb, device_map='auto',
-            max_memory={0: '3.2GiB', 'cpu': '20GiB'},
-            local_files_only=True)
+            model_id, trust_remote_code=True, device_map='auto',
+            max_memory=max_memory, local_files_only=True, **kwargs)
     return _vlm, _vlm_proc
 
 
@@ -403,7 +455,8 @@ def describe_image(img_bytes, suffix='jpg', max_side=320, prompt=None):
             img = img.resize((max(1, int(w * s)), max(1, int(h * s))))
         msg = [{'role': 'user', 'content': [{'type': 'image'}, {'type': 'text', 'text': prompt}]}]
         text = proc.apply_chat_template(msg, tokenize=False, add_generation_prompt=True)
-        inputs = proc(text=text, images=img, return_tensors='pt').to('cuda')
+        device = next(model.parameters()).device
+        inputs = proc(text=text, images=img, return_tensors='pt').to(device)
         with torch.no_grad():
             out = model.generate(**inputs, max_new_tokens=128)
         desc = proc.batch_decode(out, skip_special_tokens=True)[0]

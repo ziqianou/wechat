@@ -19,7 +19,7 @@
 |---|---|---|
 | 聊天记录导出 | 按联系人昵称/备注定位会话，输出带时间戳的对话文本 | ✅ |
 | 图片 OCR | RapidOCR 提取图片内文字 | ✅ 开 |
-| 图片视觉描述 | Qwen2.5-VL 生成照片/图表中文描述 | ⏸ 关（需显式开启） |
+| 图片视觉描述 | Qwen2.5-VL 生成照片/图表中文描述（按显存自动选模型/量化） | ⏸ 关（需显式开启） |
 | 语音转文字 | SILK → MP3 → Whisper 中文转写 | ✅ 开 |
 | 增量更新 | 记录每个会话进度，只处理新增消息 | ✅ |
 | H265 原图保留 | 微信 4.0 的 wxgf(HEVC) 图片可转 JPEG 或保留 `.h265` | ✅ |
@@ -84,6 +84,7 @@ python3 wxlib/url_capture.py
 | `WECHAT_CONTACT` | 默认联系人昵称（未设时须在命令行指定） | 无 |
 | `WECHAT_OCR` | 图片 OCR | `1` |
 | `WECHAT_VLM` | 图片视觉描述（较慢） | `0` |
+| `WECHAT_VLM_MODEL` | 强制指定 VLM 模型 id（默认按显存自动选择） | 自动 |
 | `WECHAT_ASR` | 语音转文字 | `1` |
 
 ---
@@ -286,7 +287,16 @@ python3 wxlib/sns_export.py
 ### OCR / VLM / ASR
 
 - **OCR**：RapidOCR（onnxruntime），内存处理，中文识别效果好
-- **VLM**：Qwen2.5-VL-3B（4bit 量化），GPU 推理，为无文字图片生成中文描述
+- **VLM**：Qwen2.5-VL，GPU 推理，为无文字图片生成中文描述。启动时读取主 GPU 显存自动选择模型与量化：
+
+  | 显存 | 模型 | 量化 |
+  |---|---|---|
+  | ≥ 24 GiB | `Qwen/Qwen2.5-VL-7B-Instruct` | 全精度 |
+  | ≥ 10 GiB | `Qwen/Qwen2.5-VL-7B-Instruct` | 4bit |
+  | 其余（含无 GPU） | `Qwen/Qwen2.5-VL-3B-Instruct` | 4bit |
+
+  可用 `WECHAT_VLM_MODEL` 强制指定模型；显存 < 12 GiB 时自动 4bit。
+  `max_memory` 按实际显存/内存预留，不足部分自动 offload 到 CPU。
 - **ASR**：SILK → PCM → MP3 → OpenAI Whisper（base）中文转写
 
 ### 增量更新
@@ -308,9 +318,9 @@ mmtls 工具所需的可选依赖。
 
 系统依赖：`ffmpeg`（wxgf 转 JPEG、语音转 MP3）、`sqlite3`
 
-> VLM 模型 `Qwen/Qwen2.5-VL-3B-Instruct` 首次运行需下载约 7GB 到
-> `~/.cache/huggingface`。之后以离线模式加载（`local_files_only`）。
-> GTX 1650 4GB 显存需用 4bit 量化加载。
+> VLM 模型首次运行需下载到 `~/.cache/huggingface`（3B 约 7GB，7B 约 16GB）。
+> 之后以离线模式加载（`local_files_only`）。模型与量化方式按显存自动选择，
+> 显存不足时用 4bit 量化并自动 offload 到 CPU。
 
 ---
 
@@ -396,7 +406,9 @@ sudo python3 -u tools/mmtls_analysis/tools/fresh_start.py
 A: 纯照片无文字，OCR 提取不到。需要开启视觉描述：`WECHAT_VLM=1 ./run.sh`。
 
 **Q: 运行报 CUDA OOM？**
-A: GTX 1650 显存仅 4GB，需确保没有残留的 python 进程占用显存（`nvidia-smi` 检查），且 VLM 用 4bit 量化加载。
+A: 显存不足时需确保没有残留的 python 进程占用显存（`nvidia-smi` 检查）。
+VLM 会按显存自动选择模型与 4bit 量化，并 offload 到 CPU；仍 OOM 可用
+`WECHAT_VLM_MODEL` 指定更小的模型。
 
 **Q: 增量更新是什么意思？**
 A: 记录每个会话已处理到的消息位置，二次运行只处理新增消息；已生成的 OCR/描述/转写结果缓存复用，秒级完成。
