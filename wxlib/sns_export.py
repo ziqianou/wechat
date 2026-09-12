@@ -14,7 +14,7 @@ import glob
 import logging
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 from wx_secrets import WX_BASE
@@ -24,7 +24,7 @@ import logging_config as lc
 logger = lc.get_logger('sns_export')
 
 CACHE_ROOT = os.path.join(WX_BASE, 'cache')
-OUT_ROOT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'sns_images')
+OUT_ROOT = os.path.join(_ROOT, 'data', 'sns_images')
 
 ORIGINAL_THRESHOLD = 500  # max(宽,高) >= 500 视为原图
 CATEGORIES = ('原图', '缩略图')

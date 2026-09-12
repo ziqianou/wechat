@@ -22,7 +22,7 @@ from Crypto.Cipher import AES
 
 import logging_config as lc
 
-_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 from wx_secrets import WX_BASE, SELF_WXID, DB_KEYS, IMAGE_AES_KEY
@@ -40,7 +40,7 @@ V2_HEADER = b'\x07\x08\x56\x32\x08\x07'
 V2_AES_LEN = 1024
 V2_XOR = 0xAC
 
-CACHE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cache', 'downloads')
+CACHE_DIR = os.path.join(_ROOT, 'data', 'cache', 'downloads')
 os.makedirs(CACHE_DIR, exist_ok=True)
 
 

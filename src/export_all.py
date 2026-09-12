@@ -10,7 +10,9 @@ import argparse
 from bs4 import BeautifulSoup
 from time_range import parse_time_range, describe as describe_range
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tempfile', 'decrypt_v4'))
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, _ROOT)
+sys.path.insert(0, os.path.join(_ROOT, 'wxlib'))
 import logging_config as lc
 from wx_secrets import WX_BASE
 logger = lc.get_logger('export_all')

@@ -20,7 +20,9 @@ import datetime
 import argparse
 import zstandard as zstd
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tempfile', 'decrypt_v4'))
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, _ROOT)
+sys.path.insert(0, os.path.join(_ROOT, 'wxlib'))
 import logging_config as lc
 from local_db import local_copy, key_for
 from wx_secrets import WX_BASE, SELF_WXID

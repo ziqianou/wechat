@@ -13,7 +13,7 @@ from Crypto.Cipher import AES
 
 import logging_config as lc
 
-_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 from wx_secrets import IMAGE_AES_KEY

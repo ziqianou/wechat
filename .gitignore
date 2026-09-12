@@ -3,29 +3,12 @@
 /all_chats/
 /file_messages.csv
 *.csv
-/分析.md
-/侧写.md
 # 根目录仅保留 README，其余 md（分析/侧写等）一律忽略
 /*.md
 !/README.md
 
-# ---- tempfile：仅保留 decrypt_v4 的 Python 源码，其余（解密库/缓存/图片/语音/克隆仓库）全部忽略 ----
-/tempfile/*
-!/tempfile/decrypt_v4/
-/tempfile/decrypt_v4/*
-!/tempfile/decrypt_v4/*.py
-
-# ---- frida_cdn：忽略抓包产物与带真实 token 的文档，保留脚本 ----
-/frida_cdn/*.json
-/frida_cdn/*.log
-/frida_cdn/libs/
-/frida_cdn/*.md
-
-# ---- mmtls：忽略提取出的密钥/IV/明文与日志 ----
-/mmtls_analysis/extracted/
-/mmtls_analysis/*.log
-*.bin
-*.pcap
+# ---- 运行时数据（媒体缓存/解密图片/语音/本地数据库快照）----
+/data/
 
 # ---- 密钥/凭据 ----
 /secrets.py
@@ -35,6 +18,16 @@
 .env
 *.key
 *.pem
+
+# ---- 抓包/逆向产物 ----
+/tools/frida_cdn/*.json
+/tools/frida_cdn/*.log
+/tools/frida_cdn/libs/
+/tools/frida_cdn/*.md
+/tools/mmtls_analysis/extracted/
+/tools/mmtls_analysis/*.log
+*.bin
+*.pcap
 
 # ---- 媒体与数据库文件 ----
 *.db

@@ -61,8 +61,8 @@ WECHAT_VLM=1 ./run.sh 联系人A
 > `xwechat_files/<wxid>_<pid>/db_storage/` 本地快照后按本地密钥配置解密
 
 > **🔒 需要 root 权限**（部分功能）：
-> - 常规导出（`main.py` / `run.sh` / `export_sns.py` / 图片补全）普通用户即可运行
-> - **mmtls 抓包/解密**（`mmtls_analysis/` 下 tcpdump、gdb 断点提取密钥、
+> - 常规导出（`src/main.py` / `run.sh` / `src/export_sns.py` / 图片补全）普通用户即可运行
+> - **mmtls 抓包/解密**（`tools/mmtls_analysis/` 下 tcpdump、gdb 断点提取密钥、
 >   捕获明文等）**必须 root**：`sudo bash <脚本>` 或 `sudo python3 -u <脚本>`
 > - 脚本内置 root 校验，非 root 运行会直接报错退出
 > - 微信数据目录需对运行用户可读（默认 `xwechat_files` 目录属主可读）
@@ -71,10 +71,10 @@ WECHAT_VLM=1 ./run.sh 联系人A
 
 ```bash
 # 下载消息 XML 自带 URL 的表情包/emoji，转 V2 dat 落盘（会话 hash = Msg_ 表名后缀）
-python3 tempfile/decrypt_v4/image_downloader.py <会话 hash>
+python3 wxlib/image_downloader.py <会话 hash>
 
 # 微信浏览有新图片的会话时，扫描进程内存捕获 CDN 下载 URL
-python3 tempfile/decrypt_v4/url_capture.py
+python3 wxlib/url_capture.py
 ```
 
 ### 环境变量开关
@@ -109,11 +109,11 @@ python3 tempfile/decrypt_v4/url_capture.py
 |---|---|
 | `chat_history_<显示名>.txt` | 主聊天记录（含图片 OCR/描述、语音转文字） |
 | `moments_export.txt` | 朋友圈导出（动态 + 点赞/评论，含时间） |
-| `tempfile/decrypt_v4/out/<月份>/Img/*.jpg` | 解密后的全尺寸图片（JPEG） |
-| `tempfile/decrypt_v4/out/<月份>/Img/*.h265` | wxgf 图片的 H265 原始编码 |
-| `tempfile/decrypt_v4/out_rec/` | Rec 转发记录中的图片 |
-| `tempfile/decrypt_v4/cache/voices/` | 语音转写缓存（`<local_id>.txt`；中间 silk/pcm/mp3 为临时文件，转写后即删除） |
-| `tempfile/decrypt_v4/cache/` | 增量状态与媒体结果缓存（`state.json`/`images/`/`voices/`） |
+| `data/out/<月份>/Img/*.jpg` | 解密后的全尺寸图片（JPEG） |
+| `data/out/<月份>/Img/*.h265` | wxgf 图片的 H265 原始编码 |
+| `data/out_rec/` | Rec 转发记录中的图片 |
+| `data/cache/voices/` | 语音转写缓存（`<local_id>.txt`；中间 silk/pcm/mp3 为临时文件，转写后即删除） |
+| `data/cache/` | 增量状态与媒体结果缓存（`state.json`/`images/`/`voices/`） |
 
 ---
 
@@ -123,20 +123,20 @@ python3 tempfile/decrypt_v4/url_capture.py
 
 ```bash
 # 导出全部朋友圈
-python3 export_sns.py
+python3 src/export_sns.py
 
 # 只导出某人的动态（昵称/备注/wxid 均支持）
-python3 export_sns.py 联系人A
-python3 export_sns.py wxid_xxxxxxxxxxxx
-python3 export_sns.py -w wxid_xxxxxxxxxxxx   # 同上，-w 显式指定 wxid
+python3 src/export_sns.py 联系人A
+python3 src/export_sns.py wxid_xxxxxxxxxxxx
+python3 src/export_sns.py -w wxid_xxxxxxxxxxxx   # 同上，-w 显式指定 wxid
 
 # 限制条数
-python3 export_sns.py --limit 100
+python3 src/export_sns.py --limit 100
 ```
 
 ### 昵称匹配（鲁棒性）
 
-与 `main.py` 的会话定位一致，支持：
+与 `src/main.py` 的会话定位一致，支持：
 
 1. **精确 wxid**：`wxid_xxxxxxxxxxxx`
 2. **精确显示名**（备注 > 昵称，不区分大小写）：`联系人A`
@@ -243,18 +243,18 @@ sudo ./find_image_key --deep
 
 #### 本地快照，不污染微信运行目录
 
-所有脚本在访问微信真实数据库前，先经 `tempfile/decrypt_v4/local_db.py` 的
+所有脚本在访问微信真实数据库前，先经 `wxlib/local_db.py` 的
 `local_copy()` 把目标库（连同 `-wal`/`-shm`）**复制到本地快照目录**
-`tempfile/decrypt_v4/db_local/`，再在本地副本上打开/解密。
+`data/db_local/`，再在本地副本上打开/解密。
 
 - 保证微信运行目录不被创建/修改 `-shm`、`-wal` 等文件
 - 已复制过且源文件未变化时直接复用，避免重复拷贝大库（`message_0.db` ~115MB）
 - 解密连接统一由 `local_db.open_local()` 处理（自动匹配密钥）
-- 如需释放磁盘空间：删除 `tempfile/decrypt_v4/db_local/` 即可
+- 如需释放磁盘空间：删除 `data/db_local/` 即可
 
 ### 缺失图片补全（V2 dat 生成 + CDN 下载）
 
-`tempfile/decrypt_v4/image_downloader.py` 可补全聊天记录中缺失的图片：
+`wxlib/image_downloader.py` 可补全聊天记录中缺失的图片：
 
 1. **表情包/emoji**：消息 XML 自带 `cdnurl`（`wxapp.tc.qq.com/.../stodownload?m=<md5>&filekey=<DER>`），
    直接 HTTP 下载明文 PNG/GIF
@@ -269,20 +269,20 @@ sudo ./find_image_key --deep
 
 ### 朋友圈图片导出（SNS 缓存）
 
-`tempfile/decrypt_v4/sns_export.py` 将微信朋友圈(SNS)缓存图片导出为可读文件：
+`wxlib/sns_export.py` 将微信朋友圈(SNS)缓存图片导出为可读文件：
 
 1. **扫描缓存**：微信把朋友圈图片加密缓存在 `cache/<月份>/Sns/Img/`（V2 dat 格式）
 2. **解密**：用 `media_tools.convert_v4` 还原为 JPEG
 3. **分类**：按图片尺寸 `max(宽,高) >= 500px` 判断 原图/缩略图
 4. **输出结构**：
    ```
-   tempfile/sns_images/<月份>/Sns/Img/原图/<文件名>.jpg
-   tempfile/sns_images/<月份>/Sns/Img/缩略图/<文件名>.jpg
-   tempfile/sns_images/<月份>/Sns/Video/<hash>/...   # 视频原样保留
+   data/sns_images/<月份>/Sns/Img/原图/<文件名>.jpg
+   data/sns_images/<月份>/Sns/Img/缩略图/<文件名>.jpg
+   data/sns_images/<月份>/Sns/Video/<hash>/...   # 视频原样保留
    ```
 
 ```bash
-python3 tempfile/decrypt_v4/sns_export.py
+python3 wxlib/sns_export.py
 ```
 
 > 说明：仅解密图片内容，文件名保持微信原始形式；Video/Temp 目录保留原 hash 结构。
@@ -323,32 +323,38 @@ mmtls 工具所需的可选依赖。
 ```
 .
 ├── run.sh                      # 一键导出脚本
-├── main.py                     # 主程序（会话定位、消息解析、OCR/VLM/ASR、增量、数据库直解）
-├── export_all.py               # 批量导出所有会话
-├── export_sns.py               # 朋友圈(sns.db)解密导出（动态/点赞/评论 + 时间）
 ├── requirements.txt            # Python 依赖清单
 ├── wx_secrets.example.py       # 密钥配置模板（复制为 wx_secrets.py 并填写）
 ├── wx_secrets.py               # 🔒 本地密钥/账号配置（已 gitignore，不入库）
 ├── wx_secrets.env              # 🔒 run.sh 读取的 WECHAT_BASE（已 gitignore，不入库）
 ├── .gitignore                  # 隐私数据/密钥/缓存屏蔽列表
-├── tempfile/decrypt_v4/
-│   ├── media_tools.py          # 解密 + OCR + VLM + 会话定位工具库
-│   ├── local_db.py             # 微信数据库本地快照（不污染微信运行目录）
-│   ├── db_local/               # 本地数据库副本（可随时删除释放空间）
-│   ├── image_downloader.py     # 缺失图片补全（表情包下载 + V2 dat 生成 + 落盘）
-│   ├── url_capture.py          # 扫描微信进程内存捕获 CDN storeid URL
-│   ├── sns_export.py           # 朋友圈缓存图片导出（解密+原图/缩略图分类）
-│   ├── logging_config.py       # 标准化日志配置
-│   ├── decrypt_v4.py           # 批量图片解密脚本
-│   ├── cache/                  # 增量状态与媒体缓存
-│   ├── out/                    # 解密后的图片（按月份组织）
-│   └── out_rec/                # 转发记录图片
-├── tempfile/sns_images/        # 朋友圈图片导出（<月份>/Sns/Img/{原图,缩略图}/）
-├── mmtls_analysis/             # 🔒 mmtls 协议逆向工具集（须 root 运行）
-│   ├── mmtls_decrypt.py        #   离线解密 pcap 中的 mmtls 应用数据
-│   ├── mmtls_parser.py         #   mmtls 记录流解析（HTTP/裸TCP）
-│   ├── pcap_mmtls.py           #   pcap 流重组 + 记录解析
-│   └── tools/                  #   gdb 断点提取密钥/捕获明文（sudo 运行）
+├── src/                        # 主程序入口
+│   ├── main.py                 #   导出主程序（会话定位、消息解析、OCR/VLM/ASR、增量）
+│   ├── export_all.py           #   批量导出所有会话
+│   ├── export_files.py         #   文件消息导出
+│   ├── export_sns.py           #   朋友圈(sns.db)解密导出（动态/点赞/评论 + 时间）
+│   └── time_range.py           #   时间范围解析
+├── wxlib/                      # 核心库（解密 + OCR/VLM + 会话定位）
+│   ├── media_tools.py
+│   ├── local_db.py             #   微信数据库本地快照（不污染微信运行目录）
+│   ├── image_downloader.py     #   缺失图片补全（表情包下载 + V2 dat 生成 + 落盘）
+│   ├── url_capture.py          #   扫描微信进程内存捕获 CDN storeid URL
+│   ├── sns_export.py           #   朋友圈缓存图片导出（解密+原图/缩略图分类）
+│   ├── decrypt_v4.py           #   批量图片解密脚本
+│   └── logging_config.py       #   标准化日志配置
+├── tools/                      # 逆向/抓包工具
+│   ├── frida_cdn/              #   Frida 捕获 CDN URL
+│   └── mmtls_analysis/         # 🔒 mmtls 协议逆向工具集（须 root 运行）
+│       ├── mmtls_decrypt.py
+│       ├── mmtls_parser.py
+│       ├── pcap_mmtls.py
+│       └── tools/              #   gdb 断点提取密钥/捕获明文（sudo 运行）
+├── data/                       # 运行时数据（已 gitignore，可随时删除）
+│   ├── cache/                  #   增量状态与媒体结果缓存（state.json/images/voices）
+│   ├── db_local/               #   本地数据库副本
+│   ├── out/                    #   解密后的图片（按月份）
+│   ├── out_rec/                #   转发记录图片
+│   └── sns_images/             #   朋友圈图片导出（<月份>/Sns/Img/{原图,缩略图}/）
 └── chat_history_*.txt          # 导出的聊天记录
 ```
 
@@ -362,12 +368,12 @@ A: 这些图片本地没有下载文件（微信 PC 端只缓存部分图片）�
 **Q: 怎么补全缺失的图片？**
 A: 消息 XML 自带 URL 的表情包/emoji 可自动补全：
 ```bash
-python3 tempfile/decrypt_v4/image_downloader.py <会话 hash>
+python3 wxlib/image_downloader.py <会话 hash>
 ```
 普通 C2C 聊天图片（`<img>` 消息）的下载 URL 需微信运行时签发 `storeid`，
 无法静态构造。可在微信浏览到有新图片的会话时用 `url_capture.py` 捕获：
 ```bash
-python3 tempfile/decrypt_v4/url_capture.py
+python3 wxlib/url_capture.py
 ```
 
 **Q: 为什么有些普通图片即使补全也无法下载？**
@@ -383,11 +389,11 @@ A: 确认 `key_info.db` 中的派生密钥与当前账号匹配。若微信重�
 历史坑：`hardlink.db` 曾因密钥 salt 与文件头不符而解密失败，2026-08-26 已修正。
 
 **Q: 运行 mmtls 工具报权限错误？**
-A: `mmtls_analysis/` 下的抓包（tcpdump）、gdb 断点提取密钥/捕获明文**必须用 root**：
+A: `tools/mmtls_analysis/` 下的抓包（tcpdump）、gdb 断点提取密钥/捕获明文**必须用 root**：
 ```bash
-sudo bash mmtls_analysis/tools/gdb_extract_key.sh
-sudo bash mmtls_analysis/tools/gdb_capture_plaintext.sh
-sudo python3 -u mmtls_analysis/tools/fresh_start.py
+sudo bash tools/mmtls_analysis/tools/gdb_extract_key.sh
+sudo bash tools/mmtls_analysis/tools/gdb_capture_plaintext.sh
+sudo python3 -u tools/mmtls_analysis/tools/fresh_start.py
 ```
 脚本内置 `id -u`/`geteuid` 校验，非 root 会直接报错退出。其余导出/解密脚本普通用户即可运行。
 

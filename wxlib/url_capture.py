@@ -12,10 +12,12 @@ import urllib.request
 
 import logging_config as lc
 
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
 logger = lc.get_logger('url_capture')
 
 PID = 4767
-CACHE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'cache', 'downloads', 'captured_urls.json')
+CACHE = os.path.join(_ROOT, 'data', 'cache', 'downloads', 'captured_urls.json')
 os.makedirs(os.path.dirname(CACHE), exist_ok=True)
 
 # URL 正则：stodownload 且带 m= 和 filekey=

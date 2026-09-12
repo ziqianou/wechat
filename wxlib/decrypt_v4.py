@@ -3,7 +3,7 @@ from Crypto.Cipher import AES
 
 import logging_config as lc
 
-_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 from wx_secrets import IMAGE_AES_KEY
@@ -134,7 +134,7 @@ if __name__ == '__main__':
         print('用法: python3 decrypt_v4.py <会话 attach 目录> [输出目录]')
         sys.exit(1)
     src_root = sys.argv[1]
-    out_root = sys.argv[2] if len(sys.argv) > 2 else os.path.join(os.path.dirname(os.path.abspath(__file__)), 'out')
+    out_root = sys.argv[2] if len(sys.argv) > 2 else os.path.join(_ROOT, 'data', 'out')
     files = sorted(glob.glob(os.path.join(src_root, '2026-*/Img/*.dat')))
     logger.info('找到 dat 文件 %d 个', len(files))
     ok = fail = 0

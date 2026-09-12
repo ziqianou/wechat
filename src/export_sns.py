@@ -12,13 +12,14 @@ try:
 except ImportError:
     sqlcipher3 = None
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tempfile', 'decrypt_v4'))
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, _ROOT)
+sys.path.insert(0, os.path.join(_ROOT, 'wxlib'))
 from wx_secrets import SNS_DB, SNS_KEY, SELF_WXID, SELF_NAME, CONTACT_KEY, CONTACT_REAL
 
 
 def _snap(path):
     """把微信真实目录下的库复制到本地后返回本地路径。"""
-    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tempfile', 'decrypt_v4'))
     from local_db import local_copy
     return local_copy(path)
 

@@ -15,12 +15,12 @@ import time
 import shutil
 import hashlib
 
-_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if _ROOT not in sys.path:
     sys.path.insert(0, _ROOT)
 from wx_secrets import DB_KEYS
 
-LOCAL_ROOT = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'db_local')
+LOCAL_ROOT = os.path.join(_ROOT, 'data', 'db_local')
 MARKER_EXT = '.snapshot.json'
 
 _cache = {}

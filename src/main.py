@@ -9,7 +9,9 @@ import zstandard as zstd
 from bs4 import BeautifulSoup
 from time_range import parse_time_range, describe as describe_range
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tempfile', 'decrypt_v4'))
+_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, _ROOT)
+sys.path.insert(0, os.path.join(_ROOT, 'wxlib'))
 from wx_secrets import WX_BASE, SELF_WXID, SELF_NAME, DB_KEYS
 import media_tools as mt
 import logging_config as lc
@@ -92,7 +94,7 @@ ENABLE_VLM = os.environ.get('WECHAT_VLM', '0') == '1'
 ENABLE_ASR = os.environ.get('WECHAT_ASR', '1') == '1'
 
 # 缓存目录（媒体处理结果复用，实现增量）
-CACHE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'tempfile', 'decrypt_v4', 'cache')
+CACHE_DIR = os.path.join(_ROOT, 'data', 'cache')
 IMG_CACHE = os.path.join(CACHE_DIR, 'images')
 VOICE_CACHE = os.path.join(CACHE_DIR, 'voices')
 STATE_FILE = os.path.join(CACHE_DIR, 'state.json')
