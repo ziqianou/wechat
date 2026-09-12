@@ -320,7 +320,7 @@ def _is_encrypted(data):
 if __name__ == '__main__':
     lc.setup_logging(level='DEBUG')
     if len(sys.argv) < 2:
-        print('用法: python3 image_downloader.py <会话 hash>')
+        print('用法: python3 image_downloader.py <conv_hash>')
         sys.exit(1)
     logger.info("=== 图片下载工具 ===")
     ok, fail = download_emoji_images(sys.argv[1])

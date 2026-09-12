@@ -71,7 +71,7 @@ WECHAT_VLM=1 ./run.sh 联系人A
 
 ```bash
 # 下载消息 XML 自带 URL 的表情包/emoji，转 V2 dat 落盘（会话 hash = Msg_ 表名后缀）
-python3 wxlib/image_downloader.py <会话 hash>
+python3 wxlib/image_downloader.py <conv_hash>
 
 # 微信浏览有新图片的会话时，扫描进程内存捕获 CDN 下载 URL
 python3 wxlib/url_capture.py
@@ -107,10 +107,10 @@ python3 wxlib/url_capture.py
 
 | 文件 | 说明 |
 |---|---|
-| `chat_history_<显示名>.txt` | 主聊天记录（含图片 OCR/描述、语音转文字） |
+| `chat_history_<display_name>.txt` | 主聊天记录（含图片 OCR/描述、语音转文字） |
 | `moments_export.txt` | 朋友圈导出（动态 + 点赞/评论，含时间） |
-| `data/out/<月份>/Img/*.jpg` | 解密后的全尺寸图片（JPEG） |
-| `data/out/<月份>/Img/*.h265` | wxgf 图片的 H265 原始编码 |
+| `data/out/<month>/Img/*.jpg` | 解密后的全尺寸图片（JPEG） |
+| `data/out/<month>/Img/*.h265` | wxgf 图片的 H265 原始编码 |
 | `data/out_rec/` | Rec 转发记录中的图片 |
 | `data/cache/voices/` | 语音转写缓存（`<local_id>.txt`；中间 silk/pcm/mp3 为临时文件，转写后即删除） |
 | `data/cache/` | 增量状态与媒体结果缓存（`state.json`/`images/`/`voices/`） |
@@ -260,7 +260,7 @@ sudo ./find_image_key --deep
    直接 HTTP 下载明文 PNG/GIF
 2. **转 V2 dat**：`img_to_v2dat()` 将明文图片转为微信原生 V2 dat 格式
    （`07 08 56 32` 头 + AES-ECB 前 1024B + 剩余 XOR），与微信客户端生成的完全一致
-3. **落盘**：写入真实 `msg/attach/<会话>/<月份>/Img/<md5>.dat`，并更新 `hardlink.db` 记录，
+3. **落盘**：写入真实 `msg/attach/<conversation>/<month>/Img/<md5>.dat`，并更新 `hardlink.db` 记录，
    使导出脚本/OCR 能直接识别
 
 普通 C2C 聊天图片（`<img>` 消息）的 CDN URL 需微信运行时动态签发 `storeid`，
@@ -271,14 +271,14 @@ sudo ./find_image_key --deep
 
 `wxlib/sns_export.py` 将微信朋友圈(SNS)缓存图片导出为可读文件：
 
-1. **扫描缓存**：微信把朋友圈图片加密缓存在 `cache/<月份>/Sns/Img/`（V2 dat 格式）
+1. **扫描缓存**：微信把朋友圈图片加密缓存在 `cache/<month>/Sns/Img/`（V2 dat 格式）
 2. **解密**：用 `media_tools.convert_v4` 还原为 JPEG
 3. **分类**：按图片尺寸 `max(宽,高) >= 500px` 判断 原图/缩略图
 4. **输出结构**：
    ```
-   data/sns_images/<月份>/Sns/Img/原图/<文件名>.jpg
-   data/sns_images/<月份>/Sns/Img/缩略图/<文件名>.jpg
-   data/sns_images/<月份>/Sns/Video/<hash>/...   # 视频原样保留
+   data/sns_images/<month>/original/<filename>.jpg
+   data/sns_images/<month>/thumbnail/<filename>.jpg
+   data/sns_images/<month>/Video/<hash>/...   # 视频原样保留
    ```
 
 ```bash
@@ -354,7 +354,7 @@ mmtls 工具所需的可选依赖。
 │   ├── db_local/               #   本地数据库副本
 │   ├── out/                    #   解密后的图片（按月份）
 │   ├── out_rec/                #   转发记录图片
-│   └── sns_images/             #   朋友圈图片导出（<月份>/Sns/Img/{原图,缩略图}/）
+│   └── sns_images/             #   朋友圈图片导出（<month>/{original,thumbnail}/）
 └── chat_history_*.txt          # 导出的聊天记录
 ```
 
@@ -368,7 +368,7 @@ A: 这些图片本地没有下载文件（微信 PC 端只缓存部分图片）�
 **Q: 怎么补全缺失的图片？**
 A: 消息 XML 自带 URL 的表情包/emoji 可自动补全：
 ```bash
-python3 wxlib/image_downloader.py <会话 hash>
+python3 wxlib/image_downloader.py <conv_hash>
 ```
 普通 C2C 聊天图片（`<img>` 消息）的下载 URL 需微信运行时签发 `storeid`，
 无法静态构造。可在微信浏览到有新图片的会话时用 `url_capture.py` 捕获：

@@ -1,12 +1,12 @@
 """导出微信朋友圈(SNS)缓存图片（按原图/缩略图分类）
 
-将微信 cache/<月份>/Sns/Img/<hash>/<文件名> 下的加密图片(V2 dat)解密，
+将微信 cache/<month>/Sns/Img/<hash>/<filename> 下的加密图片(V2 dat)解密，
 按图片尺寸区分 原图/缩略图，输出到：
-    tempfile/sns_images/<月份>/Sns/Img/原图/<文件名>.jpg
-    tempfile/sns_images/<月份>/Sns/Img/缩略图/<文件名>.jpg
+    data/sns_images/<month>/original/<filename>.jpg
+    data/sns_images/<month>/thumbnail/<filename>.jpg
 
 判断标准：图片 max(宽,高) >= 500px 为原图，否则为缩略图。
-Video/Temp 目录原样保留。
+Video/Temp 目录输出到 data/sns_images/<month>/<Video|Temp>/<hash>/，原样保留。
 """
 import os
 import sys
@@ -27,13 +27,13 @@ CACHE_ROOT = os.path.join(WX_BASE, 'cache')
 OUT_ROOT = os.path.join(_ROOT, 'data', 'sns_images')
 
 ORIGINAL_THRESHOLD = 500  # max(宽,高) >= 500 视为原图
-CATEGORIES = ('原图', '缩略图')
+CATEGORIES = ('original', 'thumbnail')
 SNS_SUBDIRS = ('Img', 'Video', 'Temp')
 
 
 def classify_size(w, h):
-    """按尺寸分类：'原图' 或 '缩略图'"""
-    return '原图' if max(w, h) >= ORIGINAL_THRESHOLD else '缩略图'
+    """按尺寸分类：'original' 或 'thumbnail'"""
+    return 'original' if max(w, h) >= ORIGINAL_THRESHOLD else 'thumbnail'
 
 
 def get_size(img_bytes, ext):
@@ -53,7 +53,7 @@ def export_sns_raw(months=None):
     if months is None:
         months = sorted(set(os.path.basename(d) for d in glob.glob(os.path.join(CACHE_ROOT, '*'))))
 
-    exported = {'原图': 0, '缩略图': 0}
+    exported = {'original': 0, 'thumbnail': 0}
     failed = 0
     other = 0
 
@@ -89,14 +89,14 @@ def export_sns_raw(months=None):
                     if sub == 'Img':
                         size = get_size(img, ext)
                         if size is None:
-                            cat = '缩略图'  # 无法读取尺寸，归为缩略图
+                            cat = 'thumbnail'  # 无法读取尺寸，归为缩略图
                         else:
                             cat = classify_size(*size)
-                        out_dir = os.path.join(OUT_ROOT, month, 'Sns', 'Img', cat)
+                        out_dir = os.path.join(OUT_ROOT, month, cat)
                         exported[cat] += 1
                     else:
                         # Video/Temp：保留原结构（hash 子目录）
-                        out_dir = os.path.join(OUT_ROOT, month, 'Sns', sub,
+                        out_dir = os.path.join(OUT_ROOT, month, sub,
                                                *rel_parts[1:-1])  # 保留 hash 层
                         other += 1
 
@@ -109,8 +109,8 @@ def export_sns_raw(months=None):
                         logger.warning("写入失败 %s: %s", out_path, e)
                         failed += 1
 
-    logger.info("完成: 原图 %d, 缩略图 %d, 其他 %d, 失败 %d",
-                exported['原图'], exported['缩略图'], other, failed)
+    logger.info("完成: original %d, thumbnail %d, other %d, failed %d",
+                exported['original'], exported['thumbnail'], other, failed)
     return exported
 
 

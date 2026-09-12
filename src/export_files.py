@@ -147,7 +147,7 @@ def scan_message_db(conn, n2id, file_map, h2name, contact, out, seen_md5):
                     tstr = datetime.datetime.fromtimestamp(ct).strftime('%Y-%m-%d %H:%M:%S')
                 except Exception:
                     tstr = str(ct)
-            # 磁盘路径：msg/file/<月份>/<磁盘文件名>（dir2 或从会话 dir1 推断）
+            # 磁盘路径：msg/file/<month>/<filename>（dir2 或从会话 dir1 推断）
             month = fm.get('dir2') or ''
             if isinstance(month, str) and re.match(r'^\d{4}-\d{2}$', month):
                 disk_path = os.path.join(FILE_ROOT, month, fm['name'])
