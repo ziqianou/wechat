@@ -1,0 +1,67 @@
+# ---- 个人隐私数据（聊天记录/联系人/心理分析）----
+/chat_history_*.txt
+/all_chats/
+/file_messages.csv
+*.csv
+/分析.md
+/侧写.md
+# 根目录仅保留 README，其余 md（分析/侧写等）一律忽略
+/*.md
+!/README.md
+
+# ---- tempfile：仅保留 decrypt_v4 的 Python 源码，其余（解密库/缓存/图片/语音/克隆仓库）全部忽略 ----
+/tempfile/*
+!/tempfile/decrypt_v4/
+/tempfile/decrypt_v4/*
+!/tempfile/decrypt_v4/*.py
+
+# ---- frida_cdn：忽略抓包产物与带真实 token 的文档，保留脚本 ----
+/frida_cdn/*.json
+/frida_cdn/*.log
+/frida_cdn/libs/
+/frida_cdn/*.md
+
+# ---- mmtls：忽略提取出的密钥/IV/明文与日志 ----
+/mmtls_analysis/extracted/
+/mmtls_analysis/*.log
+*.bin
+*.pcap
+
+# ---- 密钥/凭据 ----
+/secrets.py
+/local_secrets.py
+/wx_secrets.py
+/wx_secrets.env
+.env
+*.key
+*.pem
+
+# ---- 媒体与数据库文件 ----
+*.db
+*.db-wal
+*.db-shm
+*.dat
+*.silk
+*.mp3
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.h265
+
+# ---- Python 缓存 ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+
+# ---- 虚拟环境/编辑器/系统 ----
+.venv/
+venv/
+env/
+.idea/
+.vscode/
+*.swp
+.DS_Store
+Thumbs.db
