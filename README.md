@@ -9,7 +9,7 @@
 - **增量更新**：只处理新消息，媒体结果缓存复用
 - **数据库直接解密**：本地密钥配置（`wx_secrets.py`），本地快照后解密真实微信数据目录
 - **缺失图片补全**：从消息 XML 提取 CDN URL 下载表情包，转 V2 dat 落盘
-- **朋友圈图片导出**：解密 SNS 缓存图片，按 原图/缩略图 分类整理
+- **朋友圈图片导出**：解密 SNS 缓存图片，按 原图/缩略图（`original`/`thumbnail`）分类整理
 
 ---
 
@@ -25,7 +25,7 @@
 | H265 原图保留 | 微信 4.0 的 wxgf(HEVC) 图片可转 JPEG 或保留 `.h265` | ✅ |
 | 数据库直接解密 | 本地密钥配置，本地快照 + SQLCipher 解密真实目录 | ✅ |
 | 缺失图片补全 | 下载消息 XML 自带 URL 的表情包，转 V2 dat 落盘 | ✅ |
-| 朋友圈图片导出 | 解密 SNS 缓存，按原图/缩略图分类 | ✅ |
+| 朋友圈图片导出 | 解密 SNS 缓存，按原图/缩略图（`original`/`thumbnail`）分类 | ✅ |
 
 ---
 
@@ -42,7 +42,7 @@ cp wx_secrets.example.py wx_secrets.py
 echo 'WECHAT_BASE=/path/to/xwechat_files/<wxid>_<pid>' > wx_secrets.env
 ```
 
-> 密钥获取方式见下文「派生密钥格式与内存提取」。
+> 密钥获取方式见 [派生密钥格式与内存提取](#派生密钥格式与内存提取)。
 > `wx_secrets.py` 与 `wx_secrets.env` 已被忽略，不会随仓库提交。
 
 ### 2. 运行
@@ -109,9 +109,10 @@ python3 wxlib/url_capture.py
 |---|---|
 | `chat_history_<display_name>.txt` | 主聊天记录（含图片 OCR/描述、语音转文字） |
 | `moments_export.txt` | 朋友圈导出（动态 + 点赞/评论，含时间） |
+| `all_chats/*.txt` | `src/export_all.py` 批量导出的所有会话 |
+| `file_messages.csv` | `src/export_files.py` 文件消息清单（时间/发送者/文件名/路径/大小） |
 | `data/out/<month>/Img/*.jpg` | 解密后的全尺寸图片（JPEG） |
 | `data/out/<month>/Img/*.h265` | wxgf 图片的 H265 原始编码 |
-| `data/out_rec/` | Rec 转发记录中的图片 |
 | `data/cache/voices/` | 语音转写缓存（`<local_id>.txt`；中间 silk/pcm/mp3 为临时文件，转写后即删除） |
 | `data/cache/` | 增量状态与媒体结果缓存（`state.json`/`images/`/`voices/`） |
 
@@ -169,7 +170,7 @@ python3 src/export_sns.py --limit 100
 微信把可见性（"不让他看"/"不看 TA"/"仅 N 天可见"）放在**服务端过滤**，本地 `sns.db`
 只缓存"我可见"的动态，没有黑白名单表：
 
-- 被屏蔽用户的动态不会落库（本地仅 276 个用户，通讯录 1782 个）
+- 被屏蔽用户的动态不会落库（本地只缓存"我可见"的部分用户）
 - "仅 N 天可见"体现在时间跨度：如某用户 10 条动态跨度 6 天 → 疑似仅一周可见
 - 单条动态 XML 有 `<private>`/`<showFlag>` 标志，但无 blackList/whiteList 名单
 - 权限名单存服务端，本地仅加密 MMKV（未落明文）
@@ -208,7 +209,7 @@ python3 src/export_sns.py --limit 100
 本工具从 `wx_secrets.py` 读取**每个数据库的派生密钥**，解密真实目录
 `xwechat_files/<wxid>_<pid>/db_storage/`。
 
-- 密钥来源：`key_info.db` 中按账号派生的 18 个数据库密钥，填入本地 `wx_secrets.py` 的 `DB_KEYS`
+- 密钥来源：`key_info.db` 中按账号派生的各数据库密钥，填入本地 `wx_secrets.py` 的 `DB_KEYS`
 - 自动识别：明文库直接打开，加密库自动 `PRAGMA key`
 
 #### 派生密钥格式与内存提取
@@ -219,16 +220,11 @@ python3 src/export_sns.py --limit 100
 - 前 64 位 hex = **SQLCipher 密钥本体**（`PRAGMA key = "x'<96hex>'"` 直接用整串）
 
 **从微信进程内存提取**：微信运行时会以 `x'<96 hex 字符>'` 形式驻留全部派生密钥，
-扫描进程可读内存即可批量抓取（对应 `cloudbak-we-sync` 的 `scan_db_keys_from_memory`）：
+扫描进程可读内存即可批量抓取：
 
 ```python
 # Linux: 扫描 /proc/<pid>/mem，匹配 x'<96 hex>' 模式
 # 得到 96hex 后按 后32位=salt 与各库文件头匹配，即锁定每个库的密钥
-```
-
-```bash
-# macOS（cloudbak-we-sync/find_image_key.c）
-sudo ./find_image_key --deep
 ```
 
 #### hardlink.db 派生密钥修复记录
@@ -295,8 +291,8 @@ python3 wxlib/sns_export.py
 
 ### 增量更新
 
-- `cache/state.json` 记录每个会话已处理到的 `max_local_id`
-- 媒体结果缓存到 `cache/images/<md5>.{ocr,desc}`、`cache/voices/<id>.txt`
+- `data/cache/state.json` 记录每个会话已处理到的 `max_local_id`
+- 媒体结果缓存到 `data/cache/images/<md5>.{ocr,desc}`、`data/cache/voices/<id>.txt`
 - 二次运行只处理新增消息，已缓存结果秒级复用
 
 ---
@@ -339,7 +335,7 @@ mmtls 工具所需的可选依赖。
 │   ├── local_db.py             #   微信数据库本地快照（不污染微信运行目录）
 │   ├── image_downloader.py     #   缺失图片补全（表情包下载 + V2 dat 生成 + 落盘）
 │   ├── url_capture.py          #   扫描微信进程内存捕获 CDN storeid URL
-│   ├── sns_export.py           #   朋友圈缓存图片导出（解密+原图/缩略图分类）
+│   ├── sns_export.py           #   朋友圈缓存图片导出（解密+original/thumbnail 分类）
 │   ├── decrypt_v4.py           #   批量图片解密脚本
 │   └── logging_config.py       #   标准化日志配置
 ├── tools/                      # 逆向/抓包工具
@@ -353,7 +349,6 @@ mmtls 工具所需的可选依赖。
 │   ├── cache/                  #   增量状态与媒体结果缓存（state.json/images/voices）
 │   ├── db_local/               #   本地数据库副本
 │   ├── out/                    #   解密后的图片（按月份）
-│   ├── out_rec/                #   转发记录图片
 │   └── sns_images/             #   朋友圈图片导出（<month>/{original,thumbnail}/）
 └── chat_history_*.txt          # 导出的聊天记录
 ```
@@ -384,8 +379,8 @@ A: 普通聊天图片的 CDN 下载需要 `storeid`（微信用账号会话动�
 **Q: 数据库解密失败？**
 A: 确认 `key_info.db` 中的派生密钥与当前账号匹配。若微信重新登录，密钥可能变化，
 需重新从 `login/wxid_*/key_info.db` 提取密钥更新到 `wx_secrets.py` 的 `DB_KEYS`。
-也可直接从微信进程内存扫描 `x'<96 hex>'` 模式批量抓取当前派生密钥（见上文
-"派生密钥格式与内存提取"），并按 salt 与库文件头匹配后更新。
+也可直接从微信进程内存扫描 `x'<96 hex>'` 模式批量抓取当前派生密钥（见
+[派生密钥格式与内存提取](#派生密钥格式与内存提取)），并按 salt 与库文件头匹配后更新。
 历史坑：`hardlink.db` 曾因密钥 salt 与文件头不符而解密失败，2026-08-26 已修正。
 
 **Q: 运行 mmtls 工具报权限错误？**

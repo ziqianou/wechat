@@ -18,3 +18,4 @@ pycryptodome==3.17
 cryptography==46.0.5
 capstone==5.0.9
 pyelftools==0.30
+frida==17.9.1
