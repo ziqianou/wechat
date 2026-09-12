@@ -112,7 +112,7 @@ python3 tempfile/decrypt_v4/url_capture.py
 | `tempfile/decrypt_v4/out/<月份>/Img/*.jpg` | 解密后的全尺寸图片（JPEG） |
 | `tempfile/decrypt_v4/out/<月份>/Img/*.h265` | wxgf 图片的 H265 原始编码 |
 | `tempfile/decrypt_v4/out_rec/` | Rec 转发记录中的图片 |
-| `tempfile/decrypt_v4/fan_voice/` | 语音文件（`.silk` + `.mp3` + `transcript.txt`） |
+| `tempfile/decrypt_v4/cache/voices/` | 语音转写缓存（`<local_id>.txt`；中间 silk/pcm/mp3 为临时文件，转写后即删除） |
 | `tempfile/decrypt_v4/cache/` | 增量状态与媒体结果缓存（`state.json`/`images/`/`voices/`） |
 
 ---
@@ -342,8 +342,7 @@ mmtls 工具所需的可选依赖。
 │   ├── decrypt_v4.py           # 批量图片解密脚本
 │   ├── cache/                  # 增量状态与媒体缓存
 │   ├── out/                    # 解密后的图片（按月份组织）
-│   ├── out_rec/                # 转发记录图片
-│   └── fan_voice/              # 语音文件与转写结果
+│   └── out_rec/                # 转发记录图片
 ├── tempfile/sns_images/        # 朋友圈图片导出（<月份>/Sns/Img/{原图,缩略图}/）
 ├── mmtls_analysis/             # 🔒 mmtls 协议逆向工具集（须 root 运行）
 │   ├── mmtls_decrypt.py        #   离线解密 pcap 中的 mmtls 应用数据
